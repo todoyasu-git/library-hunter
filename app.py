@@ -20,7 +20,7 @@ st.title("📚 図書館ハンター")
 st.caption("楽天Booksで候補表示 → 図書館在庫確認 → メルカリ検索")
 
 def search_books(query):
-    url = "https://app.rakuten.co.jp/services/api/BooksBook/Search/20170404"
+    url = "https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404"
     params = {
         "applicationId": RAKUTEN_APP_ID,
         "title": query,
