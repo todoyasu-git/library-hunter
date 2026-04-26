@@ -61,7 +61,6 @@ def search_books(query):
 
     return items
 
-
 def check_library(isbn):
     url = "https://api.calil.jp/check"
 
@@ -84,11 +83,17 @@ def check_library(isbn):
             time.sleep(2)
             continue
 
+        # カーリルは callback({...}) のJSONP形式で返すことがある
+        if text.startswith("callback(") and text.endswith(");"):
+            text = text[len("callback("):-2]
+        elif text.startswith("callback(") and text.endswith(")"):
+            text = text[len("callback("):-1]
+
         try:
-            data = r.json()
+            data = json.loads(text)
         except Exception:
-            st.error("カーリルAPIからJSON以外の応答が返りました。")
-            st.code(text[:500])
+            st.error("カーリルAPIの応答を解析できませんでした。")
+            st.code(r.text[:500])
             return {}
 
         if data.get("continue") == 0:
@@ -97,6 +102,7 @@ def check_library(isbn):
         time.sleep(2)
 
     return data
+
 
 
 query = st.text_input("書籍名を入力", placeholder="例：るるぶ高知")
