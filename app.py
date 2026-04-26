@@ -23,11 +23,14 @@ def search_books(query):
     url = "https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404"
     params = {
         "applicationId": RAKUTEN_APP_ID,
+        "accessKey": st.secrets["RAKUTEN_ACCESS_KEY"],
         "title": query,
         "format": "json",
         "hits": 10,
     }
     r = requests.get(url, params=params, timeout=15)
+    if r.status_code != 200:
+        st.error(f"楽天APIエラー本文: {r.text}")
     r.raise_for_status()
     data = r.json()
     return [x["Item"] for x in data.get("Items", [])]
