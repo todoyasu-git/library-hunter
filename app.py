@@ -108,12 +108,13 @@ def normalize_isbn(raw: str) -> str:
 def search_google_books(query: str, max_results: int = MAX_BOOK_CANDIDATES) -> List[Dict]:
     url = "https://www.googleapis.com/books/v1/volumes"
     params = {
-        "q": query,
-        "maxResults": max_results,
-        "printType": "books",
-        "langRestrict": "ja",
-    }
-    r = requests.get(url, params=params, timeout=12)
+    "q": query,
+    "maxResults": 8,
+    "printType": "books",
+    "langRestrict": "ja",
+    "key": st.secrets["GOOGLE_BOOKS_API_KEY"],
+}
+     r = requests.get(url, params=params, timeout=12)
     r.raise_for_status()
     data = r.json()
     books = []
