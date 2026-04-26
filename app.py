@@ -19,6 +19,7 @@ LIBRARIES = {
 st.title("📚 図書館ハンター")
 st.caption("国会図書館サーチで候補表示 → 図書館在庫確認 → メルカリ検索")
 
+
 def search_books(query):
     url = "https://ndlsearch.ndl.go.jp/api/opensearch"
     params = {
@@ -30,12 +31,6 @@ def search_books(query):
     r.raise_for_status()
 
     root = ET.fromstring(r.content)
-    ns = {
-        "rss": "http://purl.org/rss/1.0/",
-        "dc": "http://purl.org/dc/elements/1.1/",
-        "dcndl": "http://ndl.go.jp/dcndl/terms/",
-        "dcterms": "http://purl.org/dc/terms/",
-    }
 
     items = []
     for item in root.findall(".//item"):
@@ -47,11 +42,9 @@ def search_books(query):
         isbn = ""
         for ident in item.findall("{http://purl.org/dc/elements/1.1/}identifier"):
             text = ident.text or ""
-            if "ISBN" in text:
-                isbn = text.replace("ISBN", "").replace(":", "").strip()
-                break
-            if text.replace("-", "").isdigit() and len(text.replace("-", "")) in [10, 13]:
-                isbn = text.strip()
+            clean = text.replace("ISBN", "").replace(":", "").replace("-", "").strip()
+            if clean.isdigit() and len(clean) in [10, 13]:
+                isbn = clean
                 break
 
         link = item.findtext("link") or ""
@@ -62,11 +55,12 @@ def search_books(query):
                 "creator": creator,
                 "publisher": publisher,
                 "date": date,
-                "isbn": isbn.replace("-", ""),
+                "isbn": isbn,
                 "link": link,
             })
 
     return items
+
 
 def check_library(isbn):
     url = "https://api.calil.jp/check"
@@ -76,14 +70,26 @@ def check_library(isbn):
         "isbn": isbn,
         "systemid": ",".join(LIBRARIES.values()),
         "format": "json",
-        "callback": "",
     }
 
     data = {}
-    for _ in range(6):
+
+    for _ in range(8):
         r = requests.get(url, params=params, timeout=15)
         r.raise_for_status()
-        data = r.json()
+
+        text = r.text.strip()
+
+        if not text:
+            time.sleep(2)
+            continue
+
+        try:
+            data = r.json()
+        except Exception:
+            st.error("カーリルAPIからJSON以外の応答が返りました。")
+            st.code(text[:500])
+            return {}
 
         if data.get("continue") == 0:
             return data
@@ -91,6 +97,7 @@ def check_library(isbn):
         time.sleep(2)
 
     return data
+
 
 query = st.text_input("書籍名を入力", placeholder="例：るるぶ高知")
 
@@ -118,6 +125,7 @@ if query:
             link = selected["link"]
 
             st.subheader(title)
+
             if creator:
                 st.write(f"著者: {creator}")
             if publisher:
