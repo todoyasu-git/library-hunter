@@ -26,7 +26,6 @@ def search_books(query):
         "title": query,
         "format": "json",
         "hits": 10,
-        "sort": "standard",
     }
     r = requests.get(url, params=params, timeout=15)
     r.raise_for_status()
