@@ -2,11 +2,11 @@ import streamlit as st
 import requests
 import urllib.parse
 import time
+import xml.etree.ElementTree as ET
 
 st.set_page_config(page_title="図書館ハンター", layout="centered")
 
 CALIL_APPKEY = st.secrets["CALIL_APPKEY"]
-RAKUTEN_APP_ID = st.secrets["RAKUTEN_APP_ID"]
 
 LIBRARIES = {
     "江東区図書館": "Tokyo_Koto",
@@ -17,34 +17,60 @@ LIBRARIES = {
 }
 
 st.title("📚 図書館ハンター")
-st.caption("楽天Booksで候補表示 → 図書館在庫確認 → メルカリ検索")
+st.caption("国会図書館サーチで候補表示 → 図書館在庫確認 → メルカリ検索")
 
 def search_books(query):
-    url = "https://openapi.rakuten.co.jp/services/api/BooksBook/Search/20170404"
-
+    url = "https://ndlsearch.ndl.go.jp/api/opensearch"
     params = {
-        "applicationId": RAKUTEN_APP_ID,
-        "accessKey": st.secrets["RAKUTEN_ACCESS_KEY"],
         "title": query,
-        "format": "json",
-        "hits": 10,
+        "cnt": 10,
     }
 
-    headers = {
-        "Referer": "https://todoyasu-git-library-hunter-app-x7hxk6.streamlit.app/"
-    }
-
-    r = requests.get(url, params=params, headers=headers, timeout=15)
-
-    if r.status_code != 200:
-        st.error(f"楽天APIエラー本文: {r.text}")
-
+    r = requests.get(url, params=params, timeout=15)
     r.raise_for_status()
-    data = r.json()
-    return [x["Item"] for x in data.get("Items", [])]
+
+    root = ET.fromstring(r.content)
+    ns = {
+        "rss": "http://purl.org/rss/1.0/",
+        "dc": "http://purl.org/dc/elements/1.1/",
+        "dcndl": "http://ndl.go.jp/dcndl/terms/",
+        "dcterms": "http://purl.org/dc/terms/",
+    }
+
+    items = []
+    for item in root.findall(".//item"):
+        title = item.findtext("title") or ""
+        creator = item.findtext("{http://purl.org/dc/elements/1.1/}creator") or ""
+        publisher = item.findtext("{http://purl.org/dc/elements/1.1/}publisher") or ""
+        date = item.findtext("{http://purl.org/dc/elements/1.1/}date") or ""
+
+        isbn = ""
+        for ident in item.findall("{http://purl.org/dc/elements/1.1/}identifier"):
+            text = ident.text or ""
+            if "ISBN" in text:
+                isbn = text.replace("ISBN", "").replace(":", "").strip()
+                break
+            if text.replace("-", "").isdigit() and len(text.replace("-", "")) in [10, 13]:
+                isbn = text.strip()
+                break
+
+        link = item.findtext("link") or ""
+
+        if title:
+            items.append({
+                "title": title,
+                "creator": creator,
+                "publisher": publisher,
+                "date": date,
+                "isbn": isbn.replace("-", ""),
+                "link": link,
+            })
+
+    return items
 
 def check_library(isbn):
     url = "https://api.calil.jp/check"
+
     params = {
         "appkey": CALIL_APPKEY,
         "isbn": isbn,
@@ -58,9 +84,12 @@ def check_library(isbn):
         r = requests.get(url, params=params, timeout=15)
         r.raise_for_status()
         data = r.json()
+
         if data.get("continue") == 0:
             return data
+
         time.sleep(2)
+
     return data
 
 query = st.text_input("書籍名を入力", placeholder="例：るるぶ高知")
@@ -74,34 +103,34 @@ if query:
         else:
             labels = []
             for b in books:
-                title = b.get("title", "タイトル不明")
-                author = b.get("author", "")
-                publisher = b.get("publisherName", "")
-                sales_date = b.get("salesDate", "")
-                labels.append(f"{title} / {author} / {publisher} / {sales_date}")
+                labels.append(
+                    f"{b['title']} / {b['creator']} / {b['publisher']} / {b['date']}"
+                )
 
             selected_label = st.selectbox("候補から選択してください", labels)
             selected = books[labels.index(selected_label)]
 
-            title = selected.get("title", "")
-            author = selected.get("author", "")
-            publisher = selected.get("publisherName", "")
-            isbn = selected.get("isbn", "")
-            image_url = selected.get("largeImageUrl") or selected.get("mediumImageUrl")
-            item_url = selected.get("itemUrl", "")
-
-            if image_url:
-                st.image(image_url, width=160)
+            title = selected["title"]
+            creator = selected["creator"]
+            publisher = selected["publisher"]
+            date = selected["date"]
+            isbn = selected["isbn"]
+            link = selected["link"]
 
             st.subheader(title)
-            st.write(f"著者: {author}")
-            st.write(f"出版社: {publisher}")
-            st.write(f"ISBN: {isbn}")
+            if creator:
+                st.write(f"著者: {creator}")
+            if publisher:
+                st.write(f"出版社: {publisher}")
+            if date:
+                st.write(f"出版年: {date}")
+            if isbn:
+                st.write(f"ISBN: {isbn}")
 
-            if item_url:
-                st.link_button("📘 楽天Booksで確認", item_url)
+            if link:
+                st.link_button("📘 国会図書館サーチで確認", link)
 
-            mercari_keyword = urllib.parse.quote(f"{title} {author}")
+            mercari_keyword = urllib.parse.quote(f"{title} {creator}")
             mercari_url = f"https://jp.mercari.com/search?keyword={mercari_keyword}"
             st.link_button("🛒 メルカリで探す", mercari_url)
 
