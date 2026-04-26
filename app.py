@@ -49,3 +49,12 @@ st.link_button(
 )
 
 st.caption("iPhoneのパスワード自動入力を使えば、貸出カード番号とパスワードをFace IDで入力できます。")
+
+st.divider()
+st.write("### 🔖 メルカリISBN検索ブックマークレット")
+
+bookmarklet = """javascript:(()=>{const m=location.href.match(/calil\\.jp\\/book\\/([0-9Xx-]+)/);if(m){location.href='https://jp.mercari.com/search?keyword='+encodeURIComponent(m[1].replaceAll('-',''));}else{alert('カーリルの本ページで実行してください');}})();"""
+
+st.write("カーリルの本ページを開いた状態で、このブックマークレットを実行すると、ISBNでメルカリ検索できます。")
+
+st.code(bookmarklet, language="javascript")
