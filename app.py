@@ -62,6 +62,8 @@ def search_books(query):
     return items
 
 def check_library(isbn):
+    import json
+
     url = "https://api.calil.jp/check"
 
     params = {
@@ -71,30 +73,28 @@ def check_library(isbn):
         "format": "json",
     }
 
-    data = {}
+    session = None
 
-    for _ in range(8):
+    for _ in range(10):
+        if session:
+            params["session"] = session
+
         r = requests.get(url, params=params, timeout=15)
         r.raise_for_status()
 
         text = r.text.strip()
 
-        if not text:
-            time.sleep(2)
-            continue
+        if text.startswith("callback("):
+            text = text[len("callback("):]
 
-        # カーリルは callback({...}) のJSONP形式で返すことがある
-        if text.startswith("callback(") and text.endswith(");"):
-            text = text[len("callback("):-2]
-        elif text.startswith("callback(") and text.endswith(")"):
-            text = text[len("callback("):-1]
+        if text.endswith(");"):
+            text = text[:-2]
+        elif text.endswith(")"):
+            text = text[:-1]
 
-        try:
-            data = json.loads(text)
-        except Exception:
-            st.error("カーリルAPIの応答を解析できませんでした。")
-            st.code(r.text[:500])
-            return {}
+        data = json.loads(text)
+
+        session = data.get("session")
 
         if data.get("continue") == 0:
             return data
